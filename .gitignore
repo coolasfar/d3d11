@@ -1,0 +1,14 @@
+.vscode/
+build/
+d3d11_debug/
+*.dll
+*.map
+*.obj
+*.pdb
+*.json
+*.db
+*.pdb
+*.dll
+*.bmp
+*.png
+
