@@ -3,9 +3,14 @@
 
 #define D3D11_INIT_H
 
-
+#include <DirectXMath.h>
 #include <d3d11.h>
 #include "platform.h"
+
+
+//NOTE: COM interfaces are prefixed with a capital I, for example, ID3D11Texture2D, some
+// calls increases the COM reference count, so we need to release it
+#define ReleaseCOM(x) { if(x){ x->Release(); x = 0; } }
 
 struct d3d11_basic
 {
@@ -18,11 +23,11 @@ struct d3d11_basic
 	D3D11_VIEWPORT ScreenViewPort;
 	D3D_DRIVER_TYPE D3dDriverType;
 
-	uint32   m4xMsaaQuality;
+	uint32 	 m4xMsaaQuality;
 };
 
 
-#include <DirectXMath.h>
+
 
 namespace Colors
 {

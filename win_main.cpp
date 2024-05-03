@@ -3,17 +3,20 @@
 #include <windowsx.h>
 #include <ole2.h>
 #include <commctrl.h>
+#include <stdio.h>
 #include <shlwapi.h>
 #include "win_main.h"
 #include "d3d11_init.cpp"
-
+#include "game_timer.cpp"
 
 HINSTANCE g_hinst;                          /* This application's HINSTANCE */
 HWND g_hwndChild;                           /* Optional child window */
 
 #define _DEBUG   1
-d3d11_basic D3D11Basic;
 
+global_variable d3d11_basic     GlobalD3D11Basic;
+global_variable game_timer      GlobalGameTimer;
+global_variable bool            GlobalPause = false;
 
 void
 OnDestroy(HWND hwnd)
@@ -30,7 +33,7 @@ OnPaint(HWND hwnd, d3d11_basic *D3d11Basic)
 {
     PAINTSTRUCT ps;
     BeginPaint(hwnd, &ps);
-   	D3D11DrawScene(D3d11Basic);
+   	//D3D11DrawScene(D3d11Basic);
     EndPaint(hwnd, &ps);
 }
 /*
@@ -71,19 +74,37 @@ WndProc(HWND hwnd, UINT uiMsg, WPARAM wParam, LPARAM lParam)
 {
     switch (uiMsg) 
 	{
-		HANDLE_MSG(hwnd, WM_DESTROY, OnDestroy);	
+		HANDLE_MSG(hwnd, WM_DESTROY, OnDestroy);
+        case WM_ACTIVATE:
+        {
+            if(LOWORD(wParam) == WA_INACTIVE)
+            {
+                GlobalPause = true;
+                GameTimerStop(&GlobalGameTimer);
+            }
+            else
+            {
+                GlobalPause = false;
+                GameTimerStart(&GlobalGameTimer);
+            }
+        }break;
 		case WM_SYSKEYDOWN:
 		case WM_SYSKEYUP:
 		case WM_KEYDOWN:
 		case WM_KEYUP:
 		{
+            uint32 vkCode = (uint32)wParam;
+            if(vkCode == 'P')
+            {
+                GlobalPause = true;
+            }
 			
 		}break;
 		case WM_PAINT:
 		{
 			PAINTSTRUCT Paint;
 			HDC DeviceContext = BeginPaint(hwnd, &Paint);
-			OnPaint(hwnd, &D3D11Basic);
+			OnPaint(hwnd, &GlobalD3D11Basic);
 			EndPaint(hwnd, &Paint);
 		}break;
 		case WM_PRINTCLIENT: 
@@ -115,11 +136,68 @@ InitApp(WNDCLASS &wc)
     return TRUE;
 }
 
+internal void
+CalculateFrameState(game_timer* GameTimer)
+{
+    static int32 FrameCount = 0;
+    static real32 TimeElapsed = 0.0f;
+
+    FrameCount++;
+
+    if((GameTimerTotalTime(GameTimer) - TimeElapsed) >= 1.0f)
+    {
+        real32 fps = (real32)FrameCount;
+        real32 msPerFrame = 1000.0f / fps;
+
+        // char output_buffer[256];
+
+		// sprintf_s(output_buffer, sizeof(output_buffer),
+		// 			"Milliseconds/frame: %.2f ms, FPS: %f\n" ,
+		// 		msPerFrame, fps);
+        // OutputDebugStringA(output_buffer);
+
+        FrameCount = 0;
+        TimeElapsed += 1.0f;
+    }
+}
+
+internal void
+ProcessPendingMessage(d3d11_basic* D3d11Basic, game_timer *GameTimer)
+{
+    MSG msg = {};
+    ResetTimer(GameTimer);
+
+    while(msg.message != WM_QUIT)
+    {
+        if (PeekMessage(&msg, 0, 0, 0, PM_REMOVE)) 
+        {
+            TranslateMessage(&msg);
+            DispatchMessage(&msg);
+        }
+        else
+        {
+            GameTimerTick(GameTimer);
+
+            if(!GlobalPause)
+            {
+                CalculateFrameState(GameTimer);
+                D3D11UpdateScene(GameTimer->DeltaTime);
+                D3D11DrawScene(D3d11Basic);
+            }
+            else
+            {
+                Sleep(100);
+            }
+        }
+    }
+}
+
+
 
 int WINAPI WinMain(HINSTANCE hinst, HINSTANCE hinstPrev,
                    LPSTR lpCmdLine, int nShowCmd)
 {
-    MSG msg;
+
     HWND hwnd;
     g_hinst = hinst;
 	WNDCLASS wc = {};
@@ -137,14 +215,16 @@ int WINAPI WinMain(HINSTANCE hinst, HINSTANCE hinstPrev,
         0);                             /* No special parameters */
     ShowWindow(hwnd, nShowCmd);
 
-	D3D11Basic = {};
-	InitDirect3D(hwnd,&D3D11Basic,960,540);
+	GlobalD3D11Basic = {};
+	InitDirect3D(hwnd,&GlobalD3D11Basic,960,540);
 
-    while (GetMessage(&msg, NULL, 0, 0)) 
-	{
-        TranslateMessage(&msg);
-        DispatchMessage(&msg);
-    }
+    GlobalGameTimer = {};
+    int64 CountsPerSecond;
+    QueryPerformanceFrequency((LARGE_INTEGER*)&CountsPerSecond);
+    GlobalGameTimer.SecondsPerCount = 1.0 / (real64)CountsPerSecond;
+    
+
+    ProcessPendingMessage(&GlobalD3D11Basic,&GlobalGameTimer);
    
     
     return 0;

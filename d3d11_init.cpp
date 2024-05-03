@@ -1,5 +1,8 @@
 #include "d3d11_init.h"
 
+
+global_variable bool GlobalEnable4xMsaa = true;
+
 internal void
 OnD3DResize(d3d11_basic* D3D11Basic, uint32 WindowWidth, uint32 WindowHeight)
 {
@@ -7,15 +10,17 @@ OnD3DResize(d3d11_basic* D3D11Basic, uint32 WindowWidth, uint32 WindowHeight)
 	assert(D3D11Basic->D3dDevice);
 	assert(D3D11Basic->SwapChain);
 
-	D3D11Basic->RenderTargetView = 0;
-	D3D11Basic->DepthStencilBuffer = 0;
-	D3D11Basic->DepthStencilView = 0;
+	
+	ReleaseCOM(D3D11Basic->RenderTargetView);
+	ReleaseCOM(D3D11Basic->DepthStencilBuffer);
+	ReleaseCOM(D3D11Basic->DepthStencilView);
 
 	ID3D11Texture2D* BackBuffer;
 	D3D11Basic->SwapChain->ResizeBuffers(1, WindowWidth, WindowHeight, DXGI_FORMAT_R8G8B8A8_UNORM, 0);
 	D3D11Basic->SwapChain->GetBuffer(0, __uuidof(ID3D11Texture2D), reinterpret_cast<void**>(&BackBuffer));
 	D3D11Basic->D3dDevice->CreateRenderTargetView(BackBuffer, 0, &D3D11Basic->RenderTargetView);
 
+	ReleaseCOM(BackBuffer);
 
 	D3D11_TEXTURE2D_DESC depthStencilDesc;
 	
@@ -24,8 +29,17 @@ OnD3DResize(d3d11_basic* D3D11Basic, uint32 WindowWidth, uint32 WindowHeight)
 	depthStencilDesc.MipLevels = 1;
 	depthStencilDesc.ArraySize = 1;
 	depthStencilDesc.Format    = DXGI_FORMAT_D24_UNORM_S8_UINT;
-	depthStencilDesc.SampleDesc.Count   = 1;
-	depthStencilDesc.SampleDesc.Quality = 0;
+
+	if(GlobalEnable4xMsaa)
+	{
+		depthStencilDesc.SampleDesc.Count   = 4;
+		depthStencilDesc.SampleDesc.Quality = D3D11Basic->m4xMsaaQuality-1;
+	}
+	else
+	{
+		depthStencilDesc.SampleDesc.Count   = 1;
+		depthStencilDesc.SampleDesc.Quality = 0;
+	}
 	depthStencilDesc.Usage          = D3D11_USAGE_DEFAULT;
 	depthStencilDesc.BindFlags      = D3D11_BIND_DEPTH_STENCIL;
 	depthStencilDesc.CPUAccessFlags = 0; 
@@ -97,8 +111,17 @@ InitDirect3D(HWND hwnd, d3d11_basic *D3D11Basic, uint32 Width, uint32 Height)
 	sd.BufferDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
 	sd.BufferDesc.ScanlineOrdering = DXGI_MODE_SCANLINE_ORDER_UNSPECIFIED;
 	sd.BufferDesc.Scaling = DXGI_MODE_SCALING_UNSPECIFIED;
-	sd.SampleDesc.Count = 1;
-	sd.SampleDesc.Quality = 0;
+	if(GlobalEnable4xMsaa)
+	{
+		sd.SampleDesc.Count = 4;
+		sd.SampleDesc.Quality = D3D11Basic->m4xMsaaQuality - 1;
+	}
+	else
+	{
+		sd.SampleDesc.Count = 1;
+		sd.SampleDesc.Quality = 0;
+	}
+
 	sd.BufferUsage  = DXGI_USAGE_RENDER_TARGET_OUTPUT;
 	sd.BufferCount  = 1;
 	sd.OutputWindow = hwnd;
@@ -122,9 +145,20 @@ InitDirect3D(HWND hwnd, d3d11_basic *D3D11Basic, uint32 Width, uint32 Height)
 
 	dxgiFactory->CreateSwapChain(D3D11Basic->D3dDevice, &sd, &D3D11Basic->SwapChain);
 
+	ReleaseCOM(dxgiDevice);
+	ReleaseCOM(dxgiAdapter);
+	ReleaseCOM(dxgiFactory);
+
+
 	OnD3DResize(D3D11Basic, Width, Height);
 
     return true;
+}
+
+internal void 
+D3D11UpdateScene(real32 dt)
+{
+
 }
 
 internal void 
@@ -135,7 +169,7 @@ D3D11DrawScene(d3d11_basic* D3d11Basic)
 	assert(D3d11Basic->SwapChain);
 
 	D3d11Basic->D3d11DeviceContext->ClearRenderTargetView(D3d11Basic->RenderTargetView,
-		reinterpret_cast<const float*>(&Colors::Silver));
+		reinterpret_cast<const float*>(&Colors::Blue));
 	D3d11Basic->D3d11DeviceContext->ClearDepthStencilView(D3d11Basic->DepthStencilView,
 		D3D11_CLEAR_DEPTH|D3D11_CLEAR_STENCIL, 1.0f, 0);
 
